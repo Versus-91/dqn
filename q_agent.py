@@ -1,5 +1,6 @@
 from math import log
 import os
+import pygame
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
@@ -16,9 +17,11 @@ from game import GameWrapper
 import random
 import matplotlib
 from state import GameState
-
-matplotlib.use('Agg')
+import torch.nn.functional as F
+from torchvision.transforms.functional import to_tensor, resize
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+matplotlib.use("Agg")
+
 N_ACTIONS = 4
 BATCH_SIZE = 128
 SAVE_EPISODE_FREQ = 100
@@ -33,8 +36,8 @@ Experience = namedtuple('Experience', field_names=[
 REVERSED = {0: 1, 1: 0, 2: 3, 3: 2}
 EPS_START = 1.0
 EPS_END = 0.1
-EPS_DECAY = 400000
-MAX_STEPS = 800000
+EPS_DECAY = 200000
+MAX_STEPS = 400000
 
 
 class ExperienceReplay:
@@ -110,7 +113,45 @@ class PacmanAgent:
             self.policy.parameters(), lr=LEARNING_RATE
         )
         self.prev_info =GameState()
+        self.images = deque(maxlen=6)
+    def calculate_reward(self, done, lives, hit_ghost, action, prev_score,info:GameState):
+        reward = 0
+        if done:
+            if lives > 0:
+                print("won")
+                reward = 30
+            else:
+                reward = -30
+            return reward
+        if self.score - prev_score == 10:
+            reward += 10
+        if self.score - prev_score == 50:
+            print("power up")
+            reward += 13
+        if reward > 0:
+            progress =  (info.collected_pellets / info.total_pellets) * 7
+            reward += progress
+            return reward
+        if self.score - prev_score >= 200:
+            return 16
+        if info.invalid_move:
+            reward -= 6
+        else:
+            if info.ghost_distance != -1 and info.ghost_distance > 5:
+                if REVERSED[action] == self.last_action:
+                    reward -= 3
+            if action == self.last_action:
+                reward += 3
+                
+        if hit_ghost:
+            reward -= 20
 
+        if self.prev_info.food_distance >= info.food_distance and info.food_distance != -1:
+            reward += 3 
+        reward -= 2
+        if reward < 0:
+            print("rewad",reward)
+        return reward
     def get_reward(self, done, lives, hit_ghost, action, prev_score,info:GameState):
         reward = 0
         if done:
@@ -250,6 +291,27 @@ class PacmanAgent:
             y = index[1][0]
             return (x,y)
         return None
+    def processs_image(self,screen):
+        screen = np.transpose(screen, (1, 0, 2))
+        # plt.imshow(screen)
+        # plt.show()
+        screen_tensor = to_tensor(screen).unsqueeze(0)
+        # Resize the screen tensor to 32x32 size
+        resized_tensor = F.interpolate(screen_tensor, size=(64, 60), mode='area')
+        # Convert the resized tensor to grayscale
+        grayscale_tensor = resized_tensor.mean(dim=1, keepdim=True)
+        crop_pixels_top = 4
+        crop_pixels_bottom = 3
+        height = grayscale_tensor.size(2)
+        cropped_tensor = grayscale_tensor[:, :, crop_pixels_top:height - crop_pixels_bottom, :]
+
+        # Crop the image array
+        # Normalize the grayscale tensor
+        normalized_tensor = cropped_tensor / 255.0
+        image_array = normalized_tensor.squeeze().numpy()
+        # plt.imshow(image_array)
+        # plt.show()
+        return normalized_tensor
     def train(self):
         if self.steps >= MAX_STEPS:
             return
@@ -277,11 +339,34 @@ class PacmanAgent:
                 else:
                     break
             hit_ghost = False
+            # self.images.append(self.processs_image(info.image))
+            # if len(self.images) == 6:
+            #     fig, axs = plt.subplots(2, 3, figsize=(12, 8))
+            #     for i in range(2):
+            #         for j in range(3):
+            #             # Get the next image tensor from the deque
+            #             image_tensor = self.images.popleft()
+            #             image_tensor = image_tensor.squeeze()
+            #             # Convert the tensor to a NumPy array
+            #             image_array = image_tensor.numpy()
+
+            #             # Convert the array to grayscale if necessary
+            #             # (e.g., if the tensor is in the shape (C, H, W))
+            #             # image_array = np.mean(image_array, axis=0)
+
+            #             # Plot the image
+            #             axs[i, j].imshow(image_array)
+            #             axs[i, j].axis('off')
+
+            #         # Adjust the spacing between subplots
+            #         plt.subplots_adjust(wspace=0.05, hspace=0.05)
+            #     # Display the plot
+            #     plt.show()
             if lives != info.lives:
-                hit_ghost = True
-                lives -= 1
+                 hit_ghost = True
+                 lives -= 1
             next_state = self.process_state(obs)
-            reward_ = self.get_reward(done, lives, hit_ghost, action_t, last_score, info)
+            reward_ = self.calculate_reward(done, lives, hit_ghost, action_t, last_score, info)
             self.prev_info = info
             last_score = self.score
             self.memory.append(state, action,torch.tensor([reward_], device=device), next_state, done)
@@ -291,7 +376,7 @@ class PacmanAgent:
             self.last_action = action_t
             if done:
                 epsilon = max(EPS_END, EPS_START - (EPS_START - EPS_END)* self.counter / EPS_DECAY)
-                print("epsilon",epsilon,"reward",self.score)
+                print("epsilon",epsilon,"reward",self.score,"step",self.steps)
                 # assert reward_sum == reward
                 self.rewards.append(self.score)
                 self.plot_rewards(avg=50)

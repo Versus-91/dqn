@@ -10,3 +10,4 @@ class GameState:
         self.ghost_distance = 0
         self.scared_ghost_distance = 0
         self.powerup_distance = 0
+        self.image = None

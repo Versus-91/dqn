@@ -31,9 +31,10 @@ class PowerPellet(Pellet):
         
     def update(self, dt):
         self.timer += dt
-        if self.timer >= self.flashTime:
-            self.visible = not self.visible
-            self.timer = 0
+        self.visible = True
+        # if self.timer >= self.flashTime:
+        #     self.visible = not self.visible
+        #     self.timer = 0
 
 
 class PelletGroup(object):

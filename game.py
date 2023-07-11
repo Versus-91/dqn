@@ -40,9 +40,9 @@ class GameWrapper:
         self.controller.update()
 
     def process_image(self, obs):
-        # image = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
-        # image = cv2.resize(image, (210, 160))
-        # image = np.array(image, dtype=np.float32) / 255.0
+        image = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
+        image = cv2.resize(image, (210, 160))
+        image = np.array(image, dtype=np.float32) / 255.0
         return obs
 
 
