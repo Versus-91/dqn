@@ -20,6 +20,8 @@ import matplotlib
 from state import GameState
 import torch.nn.functional as F
 from torchvision.transforms.functional import to_tensor, resize
+from tensorboardX import SummaryWriter
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 matplotlib.use("Agg")
 
@@ -126,6 +128,7 @@ class PacmanAgent:
         self.optimizer = optim.Adam(
             self.policy.parameters(), lr=LEARNING_RATE
         )
+        self.writer = SummaryWriter('logs/dqn')
         self.prev_info =GameState()
         self.images = deque(maxlen=4)
     def calculate_reward(self, done, lives, hit_ghost, action, prev_score,info:GameState):
