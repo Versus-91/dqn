@@ -368,7 +368,7 @@ class GameController(object):
                             self.textgroup.hideText()
                             self.showEntities()
                         else:
-                            self.textgroup.showText(PAUSETXT)
+                            #self.textgroup.showText(PAUSETXT)
                             self.textgroup.hideText()
                             self.hideEntities()
     def extract_features(self,state):
@@ -670,9 +670,9 @@ class GameController(object):
                         self.lives -= 1
                         self.lifesprites.removeImage()
                         self.pacman.die()
-                        self.ghosts.hide()
+                        #self.ghosts.hide()
                         if self.lives <= 0:
-                            self.textgroup.showText(GAMEOVERTXT)
+                            #self.textgroup.showText(GAMEOVERTXT)
                             self.pause.setPause(
                                 pauseTime=0.05, func=self.restartGame)
                         else:
@@ -728,7 +728,7 @@ class GameController(object):
         self.score = 0
         self.textgroup.updateScore(self.score)
         self.textgroup.updateLevel(self.level)
-        self.textgroup.showText(READYTXT)
+        #self.textgroup.showText(READYTXT)
         self.textgroup.hideText()
         self.lifesprites.resetLives(self.lives)
         self.fruitCaptured = []
@@ -739,7 +739,7 @@ class GameController(object):
         self.pacman.reset()
         self.ghosts.reset()
         self.fruit = None
-        self.textgroup.showText(READYTXT)
+        #self.textgroup.showText(READYTXT)
 
     def updateScore(self, points):
         self.score += points

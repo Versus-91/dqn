@@ -305,22 +305,40 @@ class PacmanAgent:
             y = index[1][0]
             return (x,y)
         return None
+    def plot(self):
+            if len(self.images) == 4:
+                images = deepcopy(self.images)
+                fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+                for i in range(2):
+                    for j in range(2):
+                        # Get the next image tensor from the deque
+                        image_tensor = images.popleft()
+                        image_tensor = image_tensor.squeeze()
+                        # Convert the tensor to a NumPy array
+                        image_array = image_tensor.numpy()
+
+                        # Convert the array to grayscale if necessary
+                        # (e.g., if the tensor is in the shape (C, H, W))
+                        # image_array = np.mean(image_array, axis=0)
+
+                        # Plot the image
+                        axs[i, j].imshow(image_array)
+                        axs[i, j].axis('off')
+
+                    # Adjust the spacing between subplots
+                    plt.subplots_adjust(wspace=0.05, hspace=0.05)
+                # Display the plo
+                plt.pause(0.001)
+                plt.savefig("frames.png")
     def processs_image(self,screen):
         screen = np.transpose(screen, (1, 0, 2))
-        # plt.imshow(screen)
-        # plt.show()
         screen_tensor = to_tensor(screen).unsqueeze(0)
-        # Resize the screen tensor to 32x32 size
         resized_tensor = F.interpolate(screen_tensor, size=(92, 84), mode='area')
-        # Convert the resized tensor to grayscale
         grayscale_tensor = resized_tensor.mean(dim=1, keepdim=True)
         crop_pixels_top = 4
         crop_pixels_bottom = 4
         height = grayscale_tensor.size(2)
         cropped_tensor = grayscale_tensor[:, :, crop_pixels_top:height - crop_pixels_bottom, :]
-
-        # Crop the image array
-        # Normalize the grayscale tensor
         normalized_tensor = cropped_tensor / 255.0
         # image_array = normalized_tensor.squeeze().numpy()
         # plt.imshow(image_array)
@@ -344,48 +362,24 @@ class PacmanAgent:
         while True:
             action = self.select_action(state)
             action_t = action.item()
-            while True:
-                    for i in range(3):
-                        obs, self.score, done, info = self.game.step(
-                            action_t)
-                        if lives != info.lives or done:
-                            break
-                    break  
+            for i in range(3):
+                obs, self.score, done, info = self.game.step(
+                        action_t)
+                if lives != info.lives or done:
+                    break
             hit_ghost = False
-            # if len(self.images) == 6:
-            #     images = deepcopy(self.images)
-            #     fig, axs = plt.subplots(2, 2, figsize=(12, 8))
-            #     for i in range(2):
-            #         for j in range(3):
-            #             # Get the next image tensor from the deque
-            #             image_tensor = images.popleft()
-            #             image_tensor = image_tensor.squeeze()
-            #             # Convert the tensor to a NumPy array
-            #             image_array = image_tensor.numpy()
 
-            #             # Convert the array to grayscale if necessary
-            #             # (e.g., if the tensor is in the shape (C, H, W))
-            #             # image_array = np.mean(image_array, axis=0)
-
-            #             # Plot the image
-            #             axs[i, j].imshow(image_array)
-            #             axs[i, j].axis('off')
-
-            #         # Adjust the spacing between subplots
-            #         plt.subplots_adjust(wspace=0.05, hspace=0.05)
-            #     # Display the plot
-            #     plt.savefig("frames.jpg")
             if lives != info.lives:
                  hit_ghost = True
                  lives -= 1
-            next_state = self.process_state(self.images)
+            self.images.append(self.processs_image(info.image))
             reward_ = self.calculate_reward(done, lives, hit_ghost, action_t, last_score, info)
             self.prev_info = info
             last_score = self.score
+            next_state = self.process_state(self.images)
             self.memory.append(state, action,torch.tensor([reward_], device=device), next_state, done)
             state = next_state
-            if self.steps % 2 == 0:
-                self.optimize_model()
+            self.optimize_model()
             if not info.invalid_move:
                 self.last_action = action_t
             if done:
@@ -393,9 +387,9 @@ class PacmanAgent:
                 print("epsilon",epsilon,"reward",self.score,"step",self.steps)
                 # assert reward_sum == reward
                 self.rewards.append(self.score)
-                self.plot_rewards(avg=50)
-                time.sleep(1)
                 self.game.restart()
+                self.plot()
+                self.plot_rewards(avg=50)
                 torch.cuda.empty_cache()
                 break
 

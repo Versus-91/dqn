@@ -108,6 +108,7 @@ class GameController(object):
         self.ghosts.clyde.startNode.denyAccess(LEFT, self.ghosts.clyde)
         self.ghosts.pinky.startNode.denyAccess(RIGHT, self.ghosts.pinky)
         self.mazedata.obj.denyGhostsAccess(self.ghosts, self.nodes)
+        self.textgroup.hideText()
 
     def startGame_old(self):
         self.mazedata.loadMaze(self.level)
@@ -240,7 +241,7 @@ class GameController(object):
                             self.textgroup.hideText()
                             self.showEntities()
                         else:
-                            self.textgroup.showText(PAUSETXT)
+                            #self.textgroup.showText(PAUSETXT)
                             self.textgroup.hideText()
                             self.hideEntities()
 
@@ -384,7 +385,7 @@ class GameController(object):
                         self.pacman.die()
                         self.ghosts.hide()
                         if self.lives <= 0:
-                            self.textgroup.showText(GAMEOVERTXT)
+                            #self.textgroup.showText(GAMEOVERTXT)
                             self.pause.setPause(
                                 pauseTime=0.1, func=self.restartGame)
                         else:
@@ -440,7 +441,7 @@ class GameController(object):
         self.score = 0
         self.textgroup.updateScore(self.score)
         self.textgroup.updateLevel(self.level)
-        self.textgroup.showText(READYTXT)
+        #self.textgroup.showText(READYTXT)
         self.textgroup.hideText()
         self.lifesprites.resetLives(self.lives)
         self.fruitCaptured = []
@@ -451,7 +452,7 @@ class GameController(object):
         self.pacman.reset()
         self.ghosts.reset()
         self.fruit = None
-        self.textgroup.showText(READYTXT)
+        #self.textgroup.showText(READYTXT)
 
     def updateScore(self, points):
         self.score += points
