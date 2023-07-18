@@ -182,7 +182,7 @@ class GameController(object):
         info = GameState()
         if not self.pacman.validDirection(action):
             invalid_move = True
-        dt = self.clock.tick(60) / 1000.0
+        dt = self.clock.tick(120) / 1000.0
         self.textgroup.update(dt)
         self.pellets.update(dt)
         if not self.pause.paused:
@@ -199,6 +199,7 @@ class GameController(object):
         else:
             state = self.get_state()
             info.frame = self.get_frame()
+            info.image = pygame.surfarray.array3d(pygame.display.get_surface())
             self.pacman.update(dt)
         # if self.flashBG:
         #     self.flashTimer += dt
@@ -226,7 +227,8 @@ class GameController(object):
         info.powerup_distance = minDistance(info.frame,5,4)
         info.ghost_distance = minDistance(info.frame,5,-6)
         info.scared_ghost_distance = minDistance(info.frame,5,6)
-        info.image = pygame.surfarray.array3d(pygame.display.get_surface())
+        if len(info.image) == 0:
+            info.image = pygame.surfarray.array3d(pygame.display.get_surface())
         return (state, self.score, self.lives == 0 or (self.pellets.isEmpty()), info)
 
     def checkEvents(self):

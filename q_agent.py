@@ -37,8 +37,8 @@ Experience = namedtuple('Experience', field_names=[
 REVERSED = {0: 1, 1: 0, 2: 3, 3: 2}
 EPS_START = 1.0
 EPS_END = 0.1
-EPS_DECAY = 200000
-MAX_STEPS = 400000
+EPS_DECAY = 400000
+MAX_STEPS = 800000
 
 
 class ExperienceReplay:
@@ -279,7 +279,7 @@ class PacmanAgent:
             torch.save(self.target.state_dict(), os.path.join(
                 os.getcwd() + "\\results", f"target-model-{self.episode}-{self.steps}.pt"))
             torch.save(self.optimizer.state_dict(), os.path.join(
-                os.getcwd() + "\\results", f"target-model-{self.episode}-{self.steps}.pt"))
+                os.getcwd() + "\\results", f"optimizer-{self.episode}-{self.steps}.pt"))
 
     def load_model(self, name, eval=False):
         name_parts = name.split("-")
@@ -368,10 +368,10 @@ class PacmanAgent:
                 if lives != info.lives or done:
                     break
             hit_ghost = False
-
             if lives != info.lives:
                  hit_ghost = True
                  lives -= 1
+                 self.plot()
             self.images.append(self.processs_image(info.image))
             reward_ = self.calculate_reward(done, lives, hit_ghost, action_t, last_score, info)
             self.prev_info = info
@@ -379,7 +379,8 @@ class PacmanAgent:
             next_state = self.process_state(self.images)
             self.memory.append(state, action,torch.tensor([reward_], device=device), next_state, done)
             state = next_state
-            self.optimize_model()
+            if self.steps % 2 == 0:
+                self.optimize_model()
             if not info.invalid_move:
                 self.last_action = action_t
             if done:
