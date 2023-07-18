@@ -28,7 +28,7 @@ BATCH_SIZE = 128
 SAVE_EPISODE_FREQ = 100
 GAMMA = 0.99
 MOMENTUM = 0.95
-MEMORY_SIZE = 30000
+MEMORY_SIZE = 18000
 LEARNING_RATE = 0.00025
 
 Experience = namedtuple('Experience', field_names=[
@@ -37,7 +37,7 @@ Experience = namedtuple('Experience', field_names=[
 REVERSED = {0: 1, 1: 0, 2: 3, 3: 2}
 EPS_START = 1.0
 EPS_END = 0.1
-EPS_DECAY = 400000
+EPS_DECAY = 800000
 MAX_STEPS = 800000
 
 
@@ -121,7 +121,6 @@ class PacmanAgent:
         self.last_reward = -1
         self.rewards = []
         self.loop_action_counter = 0
-        self.counter = 0
         self.score = 0
         self.episode = 0
         self.optimizer = optim.Adam(
@@ -203,7 +202,6 @@ class PacmanAgent:
     def optimize_model(self):
         if len(self.memory) < BATCH_SIZE:
             return
-        self.counter += 1
         experiences = self.memory.sample(BATCH_SIZE)
         batch = Experience(*zip(*experiences))
         state_batch = torch.cat(batch.state)
@@ -219,12 +217,13 @@ class PacmanAgent:
         criterion = torch.nn.SmoothL1Loss()
         loss = criterion(predicted_targets,
                          labels.detach().unsqueeze(1)).to(device)
+        self.writer.add_scalar('loss', loss.item(), global_step=self.episode)
         self.optimizer.zero_grad()
         loss.backward()
         for param in self.policy.parameters():
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
-        if self.steps % 10 == 0:
+        if self.steps % 100 == 0:
             self.target.load_state_dict(self.policy.state_dict())
 
     def select_action(self, state, eval=False):
@@ -235,7 +234,7 @@ class PacmanAgent:
             return vals.view(1, 1)
         rand = random.random()
         epsilon = max(EPS_END, EPS_START - (EPS_START - EPS_END)
-                      * self.counter / EPS_DECAY)
+                      * self.steps / EPS_DECAY)
         self.steps += 1
         if rand > epsilon:
             with torch.no_grad():
@@ -285,17 +284,20 @@ class PacmanAgent:
         name_parts = name.split("-")
         self.episode = int(name_parts[0])
         self.steps = int(name_parts[1])
-        self.counter = int(self.steps / 2)
         path = os.path.join(
             os.getcwd() + "\\results", f"target-model-{name}.pt")
         self.target.load_state_dict(torch.load(path))
         path = os.path.join(
             os.getcwd() + "\\results", f"policy-model-{name}.pt")
         self.policy.load_state_dict(torch.load(path))
+
         if eval:
             self.target.eval()
             self.policy.eval()
         else:
+            path = os.path.join(
+                os.getcwd() + "\\results", f"optimizer-{name}.pt")
+            self.optimizer.load_state_dict(torch.load(path))
             self.target.train()
             self.policy.train()
     def pacman_pos(self,state):
@@ -379,13 +381,13 @@ class PacmanAgent:
             next_state = self.process_state(self.images)
             self.memory.append(state, action,torch.tensor([reward_], device=device), next_state, done)
             state = next_state
-            if self.steps % 2 == 0:
-                self.optimize_model()
+            self.optimize_model()
             if not info.invalid_move:
                 self.last_action = action_t
             if done:
-                epsilon = max(EPS_END, EPS_START - (EPS_START - EPS_END)* self.counter / EPS_DECAY)
-                print("epsilon",epsilon,"reward",self.score,"step",self.steps)
+                epsilon = max(EPS_END, EPS_START - (EPS_START - EPS_END)* self.steps / EPS_DECAY)
+                self.writer.add_scalar('episode reward', self.score, global_step=self.episode)
+                self.log()
                 # assert reward_sum == reward
                 self.rewards.append(self.score)
                 self.game.restart()
@@ -393,7 +395,21 @@ class PacmanAgent:
                 self.plot_rewards(avg=50)
                 torch.cuda.empty_cache()
                 break
-
+    def log(self):
+        # current_lr = self.optimizer.param_groups[0]["lr"]
+        epsilon = max(EPS_END, EPS_START - (EPS_START - EPS_END)* self.steps / EPS_DECAY)
+        print(
+            "epsilon",
+            round(epsilon, 3),
+            "reward",
+            self.score,
+            "learning rate",
+            self.lr,
+            "episode",
+            self.episode,
+            "steps",
+            self.steps,
+        )
     def test(self, episodes=10):
         if self.episode < episodes:
             obs = self.game.start()
