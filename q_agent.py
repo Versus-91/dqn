@@ -142,6 +142,8 @@ class PacmanAgent:
         progress =  int((info.collected_pellets / info.total_pellets) * 10)
         if self.score - prev_score == 10 or self.score - prev_score == 50:
             reward += 1
+        if self.score >= 200:
+            reward += 1
         if hit_ghost:
             reward -= 10
         return reward
