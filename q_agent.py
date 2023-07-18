@@ -1,3 +1,4 @@
+from copy import deepcopy
 from math import log
 import os
 import pygame
@@ -28,7 +29,7 @@ SAVE_EPISODE_FREQ = 100
 GAMMA = 0.99
 MOMENTUM = 0.95
 MEMORY_SIZE = 30000
-LEARNING_RATE = 0.0003
+LEARNING_RATE = 0.00025
 
 Experience = namedtuple('Experience', field_names=[
                         'state', 'action', 'reward', 'done', 'new_state'])
@@ -72,37 +73,51 @@ class DQN(nn.Module):
 class QNetwork(nn.Module):
     def __init__(self):
         super(QNetwork, self).__init__()
-        self.conv1 = nn.Conv2d(4, 16, kernel_size=3, stride=1, padding=1)
-        self.relu1 = nn.ReLU()
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
-        self.relu2 = nn.ReLU()
-        self.fc1 = nn.Linear(32 * 21 * 28, 128)
-        self.relu3 = nn.ReLU()
-        self.fc2 = nn.Linear(128, 4)
+        self.conv1 = nn.Conv2d(in_channels=4, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.fc1 = nn.Linear(64 * 14 * 15, 128)
+        self.fc2 = nn.Linear(128, 4)  
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.relu1(x)
-        x = self.conv2(x)
-        x = self.relu2(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc1(x)
-        x = self.relu3(x)
+        x = F.relu(self.conv1(x))
+        x = self.pool(x)
+        x = F.relu(self.conv2(x))
+        x = self.pool(x)
+        x = x.view(-1, 64 * 14 * 15)
+        x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
 
+class DQNCNN(nn.Module):
+    def __init__(self):
+        super(DQNCNN, self).__init__()
+        self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.flatten = nn.Flatten()
+        self.dense = nn.Linear(64 * 7 * 7, 512)  
+        self.output_layer = nn.Linear(512, 4)
 
+    def forward(self, frame):
+        x = torch.relu(self.conv1(frame))
+        x = torch.relu(self.conv2(x))
+        x = torch.relu(self.conv3(x))
+        x = self.flatten(x)
+        x = torch.relu(self.dense(x))
+        buttons = self.output_layer(x)
+        return buttons
 class PacmanAgent:
     def __init__(self):
         self.steps = 0
         self.score = 0
-        self.target = QNetwork().to(device)
-        self.policy = QNetwork().to(device)
+        self.target = DQNCNN().to(device)
+        self.policy = DQNCNN().to(device)
         # self.load_model()
         self.memory = ExperienceReplay(MEMORY_SIZE)
         self.game = GameWrapper()
         self.last_action = 0
-        self.buffer = deque(maxlen=4)
+        self.buffer = deque(maxlen=6)
         self.last_reward = -1
         self.rewards = []
         self.loop_action_counter = 0
@@ -113,7 +128,7 @@ class PacmanAgent:
             self.policy.parameters(), lr=LEARNING_RATE
         )
         self.prev_info =GameState()
-        self.images = deque(maxlen=6)
+        self.images = deque(maxlen=4)
     def calculate_reward(self, done, lives, hit_ghost, action, prev_score,info:GameState):
         reward = 0
         if done:
@@ -136,21 +151,20 @@ class PacmanAgent:
             return 16
         if info.invalid_move:
             reward -= 6
-        else:
-            if info.ghost_distance != -1 and info.ghost_distance > 5:
-                if REVERSED[action] == self.last_action:
-                    reward -= 3
-            if action == self.last_action:
-                reward += 3
+        # else:
+        #     if info.ghost_distance != -1 and info.ghost_distance > 5:
+        #         if REVERSED[action] == self.last_action:
+        #             reward -= 3
+        #     if action == self.last_action:
+        #         reward += 3
                 
         if hit_ghost:
             reward -= 20
-
         if self.prev_info.food_distance >= info.food_distance and info.food_distance != -1:
-            reward += 3 
-        reward -= 2
-        if reward < 0:
-            print("rewad",reward)
+            reward += 2
+        if self.prev_info.powerup_distance >= info.powerup_distance and info.powerup_distance != -1:
+            reward += 1
+        reward -= 1
         return reward
     def get_reward(self, done, lives, hit_ghost, action, prev_score,info:GameState):
         reward = 0
@@ -177,7 +191,6 @@ class PacmanAgent:
 
         if hit_ghost:
             reward -= 20
-
         if self.prev_info.food_distance >= info.food_distance and info.food_distance != -1:
             reward += 3
         elif self.prev_info.food_distance < info.food_distance and info.food_distance != -1:
@@ -252,12 +265,11 @@ class PacmanAgent:
 
     def process_state(self, states):
 
-        tensor = [torch.from_numpy(arr).float().to(device) for arr in states]
-
+        tensors = [arr.to(device) for arr in states]
         # frightened_ghosts_tensor = torch.from_numpy(
         #     states[3]).float().to(device)
-        channel_matrix = torch.stack(tensor, dim=0)
-        channel_matrix = channel_matrix.unsqueeze(0)
+        channel_matrix = torch.cat(tensors, dim=1)
+        #channel_matrix = channel_matrix.unsqueeze(0)
         return channel_matrix
 
     def save_model(self):
@@ -265,6 +277,8 @@ class PacmanAgent:
             torch.save(self.policy.state_dict(), os.path.join(
                 os.getcwd() + "\\results", f"policy-model-{self.episode}-{self.steps}.pt"))
             torch.save(self.target.state_dict(), os.path.join(
+                os.getcwd() + "\\results", f"target-model-{self.episode}-{self.steps}.pt"))
+            torch.save(self.optimizer.state_dict(), os.path.join(
                 os.getcwd() + "\\results", f"target-model-{self.episode}-{self.steps}.pt"))
 
     def load_model(self, name, eval=False):
@@ -297,18 +311,18 @@ class PacmanAgent:
         # plt.show()
         screen_tensor = to_tensor(screen).unsqueeze(0)
         # Resize the screen tensor to 32x32 size
-        resized_tensor = F.interpolate(screen_tensor, size=(64, 60), mode='area')
+        resized_tensor = F.interpolate(screen_tensor, size=(92, 84), mode='area')
         # Convert the resized tensor to grayscale
         grayscale_tensor = resized_tensor.mean(dim=1, keepdim=True)
         crop_pixels_top = 4
-        crop_pixels_bottom = 3
+        crop_pixels_bottom = 4
         height = grayscale_tensor.size(2)
         cropped_tensor = grayscale_tensor[:, :, crop_pixels_top:height - crop_pixels_bottom, :]
 
         # Crop the image array
         # Normalize the grayscale tensor
         normalized_tensor = cropped_tensor / 255.0
-        image_array = normalized_tensor.squeeze().numpy()
+        # image_array = normalized_tensor.squeeze().numpy()
         # plt.imshow(image_array)
         # plt.show()
         return normalized_tensor
@@ -321,31 +335,30 @@ class PacmanAgent:
         random_action = random.choice([0, 1, 2, 3])
         obs, self.score, done, info = self.game.step(
             random_action)
-        state = self.process_state(obs)
         last_score = 0
         lives = 3
-        pacman_pos = self.pacman_pos(obs[2])
+        for i in range(6):
+            obs, self.score, done, info = self.game.step(random_action)      
+            self.images.append(self.processs_image(info.image))
+        state = self.process_state(self.images)
         while True:
             action = self.select_action(state)
             action_t = action.item()
             while True:
-                if not done:
-                    obs, self.score, done, info = self.game.step(
-                        action_t)
-                    pacman_pos_new = self.pacman_pos(obs[2])
-                    if pacman_pos_new != pacman_pos or  lives != info.lives or info.invalid_move:
-                        pacman_pos = pacman_pos_new
-                        break
-                else:
-                    break
+                    for i in range(3):
+                        obs, self.score, done, info = self.game.step(
+                            action_t)
+                        if lives != info.lives or done:
+                            break
+                    break  
             hit_ghost = False
-            # self.images.append(self.processs_image(info.image))
             # if len(self.images) == 6:
-            #     fig, axs = plt.subplots(2, 3, figsize=(12, 8))
+            #     images = deepcopy(self.images)
+            #     fig, axs = plt.subplots(2, 2, figsize=(12, 8))
             #     for i in range(2):
             #         for j in range(3):
             #             # Get the next image tensor from the deque
-            #             image_tensor = self.images.popleft()
+            #             image_tensor = images.popleft()
             #             image_tensor = image_tensor.squeeze()
             #             # Convert the tensor to a NumPy array
             #             image_array = image_tensor.numpy()
@@ -361,11 +374,11 @@ class PacmanAgent:
             #         # Adjust the spacing between subplots
             #         plt.subplots_adjust(wspace=0.05, hspace=0.05)
             #     # Display the plot
-            #     plt.show()
+            #     plt.savefig("frames.jpg")
             if lives != info.lives:
                  hit_ghost = True
                  lives -= 1
-            next_state = self.process_state(obs)
+            next_state = self.process_state(self.images)
             reward_ = self.calculate_reward(done, lives, hit_ghost, action_t, last_score, info)
             self.prev_info = info
             last_score = self.score
@@ -373,7 +386,8 @@ class PacmanAgent:
             state = next_state
             if self.steps % 2 == 0:
                 self.optimize_model()
-            self.last_action = action_t
+            if not info.invalid_move:
+                self.last_action = action_t
             if done:
                 epsilon = max(EPS_END, EPS_START - (EPS_START - EPS_END)* self.counter / EPS_DECAY)
                 print("epsilon",epsilon,"reward",self.score,"step",self.steps)
