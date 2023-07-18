@@ -38,7 +38,7 @@ Experience = namedtuple('Experience', field_names=[
 REVERSED = {0: 1, 1: 0, 2: 3, 3: 2}
 EPS_START = 1.0
 EPS_END = 0.1
-episodes = 0
+episodes = 1000
 
 class ExperienceReplay:
     def __init__(self, capacity) -> None:
@@ -141,11 +141,12 @@ class PacmanAgent:
             return reward
         progress =  int((info.collected_pellets / info.total_pellets) * 10)
         if self.score - prev_score == 10 or self.score - prev_score == 50:
-            reward += 1
+            reward += 4
         if self.score >= 200:
             reward += 1
         if hit_ghost:
             reward -= 10
+        reward -= 1
         return reward
 
     def optimize_model(self):
@@ -169,8 +170,6 @@ class PacmanAgent:
         self.writer.add_scalar('loss', loss.item(), global_step=self.episode)
         self.optimizer.zero_grad()
         loss.backward()
-        for param in self.policy.parameters():
-            param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
         if self.steps % 100 == 0:
             self.target.load_state_dict(self.policy.state_dict())
@@ -294,7 +293,7 @@ class PacmanAgent:
         # plt.show()
         return normalized_tensor
     def train(self):
-        if self.episode >= episodes:
+        while self.episode <= episodes:
             self.save_model()
             obs = self.game.start()
             self.episode += 1
