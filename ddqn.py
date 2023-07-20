@@ -30,7 +30,7 @@ BATCH_SIZE = 128
 SAVE_EPISODE_FREQ = 100
 GAMMA = 0.99
 MOMENTUM = 0.95
-MEMORY_SIZE = 20000
+MEMORY_SIZE = 18000
 
 Experience = namedtuple('Experience', field_names=[
                         'state', 'action', 'reward', 'done', 'new_state'])
@@ -38,7 +38,9 @@ Experience = namedtuple('Experience', field_names=[
 REVERSED = {0: 1, 1: 0, 2: 3, 3: 2}
 EPS_START = 1.0
 EPS_END = 0.1
-episodes = 2000
+MAX_STEP = 1000000
+
+episodes = 1500
 
 class ExperienceReplay:
     def __init__(self, capacity) -> None:
@@ -179,7 +181,7 @@ class PacmanAgent:
         loss.backward()
         self.optimizer.step()
 
-        if self.steps % 100 == 0:
+        if self.steps % 2000 == 0:
             self.target.load_state_dict(self.policy.state_dict())
 
     def select_action(self, state, eval=False):
@@ -301,7 +303,7 @@ class PacmanAgent:
         # plt.show()
         return normalized_tensor
     def train(self):
-        while self.episode <= episodes:
+        while self.steps <= MAX_STEP:
             self.save_model()
             obs = self.game.start()
             self.episode += 1
@@ -338,13 +340,13 @@ class PacmanAgent:
                 if not info.invalid_move:
                     self.last_action = action_t
                 if done:
-                    self.epsilon = max(EPS_END, EPS_START - (EPS_START - EPS_END)* self.episode / episodes)
+                    self.epsilon = max(EPS_END, EPS_START - (EPS_START - EPS_END)* self.steps / MAX_STEP)
                     self.writer.add_scalar('episode reward', self.score, global_step=self.episode)
                     self.log()
                     # assert reward_sum == reward
                     self.rewards.append(self.score)
                     self.game.restart()
-                    self.plot_rewards(avg=50)
+                    self.plot_rewards(avg=50,name="double_dqn.png")
                     torch.cuda.empty_cache()
                     break
         else:
