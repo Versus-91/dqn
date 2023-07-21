@@ -371,21 +371,32 @@ class PacmanAgent:
             obs = self.game.start()
             self.episode += 1
             random_action = random.choice([0, 1, 2, 3])
-            obs, reward, done, _ = self.game.step(
+            obs, self.score, done, info = self.game.step(
                 random_action)
-            state = self.process_state(obs)
+            last_score = 0
+            lives = 3
+            for i in range(6):
+                obs, self.score, done, info = self.game.step(random_action)      
+                self.images.append(self.processs_image(info.image))
+            state = self.process_state(self.images)
             while True:
-                action = self.select_action(state, eval=True)
+                action = self.select_action(state)
                 action_t = action.item()
-                for i in range(3):
-                    if not done:
-                        obs, reward, done, _ = self.game.step(
+                for i in range(4):
+                    obs, self.score, done, info = self.game.step(
                             action_t)
-                    else:
+                    if lives != info.lives or done:
                         break
-                state = self.process_state(obs)
+                if lives != info.lives:
+                    lives -= 1
+                self.images.append(self.processs_image(info.image))
+                self.prev_info = info
+                last_score = self.score
+                next_state = self.process_state(self.images)
+                self.images.append(self.processs_image(info.image))
+                state = self.process_state(self.images)
                 if done:
-                    self.rewards.append(reward)
+                    self.rewards.append(self.score)
                     self.plot_rewards(name="test.png", avg=2)
                     time.sleep(1)
                     self.game.restart()
@@ -397,9 +408,9 @@ class PacmanAgent:
 
 if __name__ == '__main__':
     agent = PacmanAgent()
-    #agent.load_model(name="1200-646650", eval=True)
+    agent.load_model(name="1500-746581", eval=True)
     #gent.episode = 0
     agent.rewards = []
     while True:
-        agent.train()
-        #agent.test()
+        #agent.train()
+        agent.test()
